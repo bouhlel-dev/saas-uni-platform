@@ -5,8 +5,54 @@ import { Badge } from "@/components/ui/badge";
 import { DollarSign, TrendingUp, CreditCard, Building2, Download } from "lucide-react";
 import { NavLink } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
 
 const Billing = () => {
+  const [stats, setStats] = useState({
+    totalRevenue: "$0",
+    activeSubscriptions: 0,
+    mrr: "$0",
+    payingUniversities: 0
+  });
+  const [transactions, setTransactions] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchBilling = async () => {
+      try {
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/super-admin/billing`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (response.ok) {
+          const data = await response.json();
+          setStats(data.stats);
+          setTransactions(data.transactions);
+        } else {
+          console.error('Failed to fetch billing data:', response.status, response.statusText);
+          toast({
+            title: "Error",
+            description: `Failed to load billing data: ${response.statusText}`,
+            variant: "destructive"
+          });
+        }
+      } catch (error) {
+        console.error('Error fetching billing data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load billing data",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchBilling();
+  }, []);
+
   const sidebarContent = (
     <nav className="space-y-2">
       <NavLink to="/dashboard/super-admin" className="block px-3 py-2 rounded-md hover:bg-muted">
@@ -27,21 +73,22 @@ const Billing = () => {
     </nav>
   );
 
-  const stats = [
-    { title: "Total Revenue", value: "$1,284,500", change: "+23%", icon: DollarSign },
-    { title: "Active Subscriptions", value: "124", change: "+12", icon: CreditCard },
-    { title: "MRR", value: "$89,450", change: "+18%", icon: TrendingUp },
-    { title: "Paying Universities", value: "124", change: "+12", icon: Building2 },
+  const statCards = [
+    { title: "Total Revenue", value: stats.totalRevenue, change: "+23%", icon: DollarSign },
+    { title: "Active Subscriptions", value: stats.activeSubscriptions.toString(), change: "+12", icon: CreditCard },
+    { title: "MRR", value: stats.mrr, change: "+18%", icon: TrendingUp },
+    { title: "Paying Universities", value: stats.payingUniversities.toString(), change: "+12", icon: Building2 },
   ];
 
-  const transactions = [
-    { id: "INV-001", university: "Harvard University", plan: "Enterprise", amount: "$2,499", date: "2024-03-15", status: "Paid" },
-    { id: "INV-002", university: "MIT", plan: "Enterprise", amount: "$2,499", date: "2024-03-14", status: "Paid" },
-    { id: "INV-003", university: "Oxford University", plan: "Premium", amount: "$999", date: "2024-03-13", status: "Paid" },
-    { id: "INV-004", university: "Stanford University", plan: "Enterprise", amount: "$2,499", date: "2024-03-12", status: "Paid" },
-    { id: "INV-005", university: "Cambridge University", plan: "Premium", amount: "$999", date: "2024-03-11", status: "Pending" },
-    { id: "INV-006", university: "ETH Zurich", plan: "Premium", amount: "$999", date: "2024-03-10", status: "Paid" },
-  ];
+  if (loading) {
+    return (
+      <DashboardLayout sidebar={sidebarContent} title="Billing & Revenue">
+        <div className="flex items-center justify-center h-full">
+          <p>Loading billing data...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout sidebar={sidebarContent} title="Billing & Revenue">
@@ -59,7 +106,7 @@ const Billing = () => {
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
+          {statCards.map((stat) => (
             <Card key={stat.title}>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -119,12 +166,12 @@ const Billing = () => {
                         {tx.status}
                       </Badge>
                     </div>
-                    <Button 
-                      variant="ghost" 
+                    <Button
+                      variant="ghost"
                       size="sm"
-                      onClick={() => toast({ 
-                        title: "Invoice Downloaded", 
-                        description: `${tx.id} invoice downloaded successfully.` 
+                      onClick={() => toast({
+                        title: "Invoice Downloaded",
+                        description: `${tx.id} invoice downloaded successfully.`
                       })}
                     >
                       <Download className="w-4 h-4" />

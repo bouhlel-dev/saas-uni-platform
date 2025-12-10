@@ -5,53 +5,69 @@ import { Badge } from "@/components/ui/badge";
 import { Building, Users, BookOpen, Calendar, Plus, GraduationCap, UserCog } from "lucide-react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { toast } from "@/hooks/use-toast";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { UniversityAdminSidebar } from "@/components/UniversityAdminSidebar";
 
 const UniversityAdminDashboard = () => {
   const navigate = useNavigate();
-  
-  const sidebarContent = (
-    <nav className="space-y-2">
-      <NavLink to="/dashboard/university-admin" className="block px-3 py-2 rounded-md bg-primary/10 text-primary font-medium">
-        Overview
-      </NavLink>
-      <NavLink to="/dashboard/university-admin/faculties" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Faculties
-      </NavLink>
-      <NavLink to="/dashboard/university-admin/teachers" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Teachers
-      </NavLink>
-      <NavLink to="/dashboard/university-admin/students" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Students
-      </NavLink>
-      <NavLink to="/dashboard/university-admin/courses" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Courses
-      </NavLink>
-      <NavLink to="/dashboard/university-admin/timetable" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Timetable
-      </NavLink>
-    </nav>
-  );
+  const [stats, setStats] = useState({
+    university: { name: "Loading...", address: "", subscription: "" },
+    counts: { faculties: 0, teachers: 0, students: 0, courses: 0 }
+  });
+  const [faculties, setFaculties] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const stats = [
-    { title: "Faculties", value: "12", icon: Building, change: "+2 this year" },
-    { title: "Total Teachers", value: "487", icon: UserCog, change: "+34 this semester" },
-    { title: "Total Students", value: "15,234", icon: GraduationCap, change: "+1,203 new" },
-    { title: "Active Courses", value: "234", icon: BookOpen, change: "18 new this term" },
+  const [recentActivities, setRecentActivities] = useState<any[]>([]);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch Dashboard Stats
+        const statsData = await api.get('/admin/dashboard-stats');
+        setStats(statsData);
+
+        // Fetch Faculties List
+        const facultiesData = await api.get('/admin/faculties');
+        setFaculties(facultiesData);
+
+        // Fetch Recent Activities
+        const activitiesData = await api.get('/admin/recent-activities');
+        setRecentActivities(activitiesData);
+
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        toast({
+          title: "Error",
+          description: "Failed to load dashboard data",
+          variant: "destructive"
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const sidebarContent = <UniversityAdminSidebar />;
+
+  const statCards = [
+    { title: "Faculties", value: stats.counts.faculties, icon: Building, change: "Active" },
+    { title: "Total Teachers", value: stats.counts.teachers, icon: UserCog, change: "Registered" },
+    { title: "Total Students", value: stats.counts.students, icon: GraduationCap, change: "Enrolled" },
+    { title: "Active Courses", value: stats.counts.courses, icon: BookOpen, change: "This Term" },
   ];
 
-  const faculties = [
-    { name: "Engineering & Technology", departments: 8, students: 4523, teachers: 145 },
-    { name: "Business & Economics", departments: 5, students: 3821, teachers: 98 },
-    { name: "Medicine & Health Sciences", departments: 6, students: 2890, teachers: 167 },
-    { name: "Arts & Humanities", departments: 7, students: 2456, teachers: 77 },
-  ];
-
-  const recentActivities = [
-    { action: "New course created", details: "Advanced Machine Learning - CS401", time: "2 hours ago" },
-    { action: "Teacher assigned", details: "Dr. Smith to Data Science course", time: "5 hours ago" },
-    { action: "Timetable updated", details: "Spring 2024 schedule published", time: "1 day ago" },
-    { action: "Exam scheduled", details: "Final exams for Computer Science dept", time: "2 days ago" },
-  ];
+  if (loading) {
+    return (
+      <DashboardLayout sidebar={sidebarContent} title="University Admin Dashboard">
+        <div className="flex items-center justify-center h-full">
+          <p>Loading dashboard...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout sidebar={sidebarContent} title="University Admin Dashboard">
@@ -61,17 +77,17 @@ const UniversityAdminDashboard = () => {
           <CardHeader>
             <div className="flex items-center justify-between">
               <div>
-                <CardTitle className="text-2xl">Stanford University</CardTitle>
-                <CardDescription className="text-base">California, United States</CardDescription>
+                <CardTitle className="text-2xl">{stats.university.name}</CardTitle>
+                <CardDescription className="text-base">{stats.university.address || 'Address not available'}</CardDescription>
               </div>
-              <Badge variant="secondary" className="text-sm">Premium Plan</Badge>
+              <Badge variant="secondary" className="text-sm capitalize">{stats.university.subscription} Plan</Badge>
             </div>
           </CardHeader>
         </Card>
 
         {/* Stats Grid */}
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
+          {statCards.map((stat) => (
             <Card key={stat.title}>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
@@ -95,34 +111,38 @@ const UniversityAdminDashboard = () => {
               </div>
               <Button size="sm" onClick={() => navigate('/dashboard/university-admin/faculties')}>
                 <Plus className="w-4 h-4 mr-2" />
-                Add Faculty
+                Manage Faculties
               </Button>
             </div>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {faculties.map((faculty, idx) => (
-                <div key={idx} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                  <div className="flex-1">
-                    <h3 className="font-semibold">{faculty.name}</h3>
-                    <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Building className="w-3 h-3" />
-                        {faculty.departments} Departments
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <GraduationCap className="w-3 h-3" />
-                        {faculty.students.toLocaleString()} Students
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <UserCog className="w-3 h-3" />
-                        {faculty.teachers} Teachers
-                      </span>
+              {faculties.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No faculties found.</p>
+              ) : (
+                faculties.map((faculty, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors">
+                    <div className="flex-1">
+                      <h3 className="font-semibold">{faculty.name}</h3>
+                      <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1">
+                          <Building className="w-3 h-3" />
+                          {faculty.departments.length} Departments
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <GraduationCap className="w-3 h-3" />
+                          {faculty.students} Students
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <UserCog className="w-3 h-3" />
+                          {faculty.teachers} Teachers
+                        </span>
+                      </div>
                     </div>
+                    <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/university-admin/faculties')}>View</Button>
                   </div>
-                  <Button variant="outline" size="sm" onClick={() => navigate('/dashboard/university-admin/faculties')}>Manage</Button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -135,16 +155,22 @@ const UniversityAdminDashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {recentActivities.map((activity, idx) => (
-                <div key={idx} className="flex items-start gap-3 p-3 border rounded-lg">
-                  <div className="w-2 h-2 mt-2 rounded-full bg-primary" />
-                  <div className="flex-1">
-                    <p className="font-medium">{activity.action}</p>
-                    <p className="text-sm text-muted-foreground">{activity.details}</p>
+              {recentActivities.length === 0 ? (
+                <p className="text-muted-foreground text-center py-4">No recent activities.</p>
+              ) : (
+                recentActivities.map((activity, idx) => (
+                  <div key={idx} className="flex items-start gap-3 p-3 border rounded-lg">
+                    <div className="w-2 h-2 mt-2 rounded-full bg-primary" />
+                    <div className="flex-1">
+                      <p className="font-medium">{activity.action}</p>
+                      <p className="text-sm text-muted-foreground">{activity.details}</p>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(activity.time).toLocaleDateString()}
+                    </span>
                   </div>
-                  <span className="text-xs text-muted-foreground">{activity.time}</span>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

@@ -64,8 +64,8 @@ export function CreateAssignmentDialog({ open, onOpenChange }: CreateAssignmentD
             </div>
             <div className="space-y-2">
               <Label htmlFor="title">Assignment Title *</Label>
-              <Input 
-                id="title" 
+              <Input
+                id="title"
                 placeholder="e.g., ML Model Implementation"
                 value={formData.title}
                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
@@ -74,8 +74,8 @@ export function CreateAssignmentDialog({ open, onOpenChange }: CreateAssignmentD
             </div>
             <div className="space-y-2">
               <Label htmlFor="description">Description *</Label>
-              <Textarea 
-                id="description" 
+              <Textarea
+                id="description"
                 placeholder="Detailed assignment instructions..."
                 rows={4}
                 value={formData.description}
@@ -112,8 +112,8 @@ export function CreateAssignmentDialog({ open, onOpenChange }: CreateAssignmentD
               </div>
               <div className="space-y-2">
                 <Label htmlFor="points">Total Points *</Label>
-                <Input 
-                  id="points" 
+                <Input
+                  id="points"
                   type="number"
                   placeholder="100"
                   value={formData.points}

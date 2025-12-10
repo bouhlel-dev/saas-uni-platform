@@ -1,6 +1,7 @@
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Menu } from "lucide-react";
 import { useState } from "react";
+import { ModeToggle } from "@/components/mode-toggle";
 import {
   Sheet,
   SheetContent,
@@ -11,10 +12,10 @@ export const Navbar = () => {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
-    { name: "Features", href: "#features" },
-    { name: "Roles", href: "#roles" },
-    { name: "Architecture", href: "#architecture" },
-    { name: "Pricing", href: "#pricing" },
+    { name: "Features", href: "/#features" },
+    { name: "Roles", href: "/#roles" },
+    { name: "Architecture", href: "/#architecture" },
+    { name: "Pricing", href: "/pricing" },
   ];
 
   return (
@@ -44,6 +45,7 @@ export const Navbar = () => {
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-4">
+            <ModeToggle />
             <Button variant="ghost" onClick={() => window.location.href = '/auth'}>Sign In</Button>
             <Button onClick={() => window.location.href = '/auth'}>Get Started</Button>
           </div>
@@ -68,6 +70,9 @@ export const Navbar = () => {
                   </a>
                 ))}
                 <div className="flex flex-col gap-3 pt-4 border-t border-border">
+                  <div className="flex justify-start">
+                    <ModeToggle />
+                  </div>
                   <Button variant="ghost" className="w-full" onClick={() => window.location.href = '/auth'}>Sign In</Button>
                   <Button className="w-full" onClick={() => window.location.href = '/auth'}>Get Started</Button>
                 </div>

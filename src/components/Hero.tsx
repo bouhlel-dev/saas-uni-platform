@@ -1,7 +1,10 @@
 import { Button } from "@/components/ui/button";
 import { GraduationCap, Users, BookOpen, Shield } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 export const Hero = () => {
+  const navigate = useNavigate();
+
   return (
     <section className="relative min-h-screen flex items-center justify-center bg-gradient-hero overflow-hidden">
       {/* Animated background elements */}
@@ -28,13 +31,17 @@ export const Hero = () => {
 
           {/* Description */}
           <p className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto leading-relaxed">
-            Empower your institution with a comprehensive SaaS solution for academic excellence. 
+            Empower your institution with a comprehensive SaaS solution for academic excellence.
             From multi-tenant management to student success tracking.
           </p>
 
           {/* CTA Buttons */}
           <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
-            <Button size="lg" className="text-lg shadow-elegant hover:shadow-glow transition-all">
+            <Button
+              size="lg"
+              className="text-lg shadow-elegant hover:shadow-glow transition-all"
+              onClick={() => navigate('/pricing')}
+            >
               Request Access
             </Button>
             <Button size="lg" variant="outline" className="text-lg">

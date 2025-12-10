@@ -4,38 +4,84 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "@/hooks/use-toast";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon } from "lucide-react";
+import { CalendarIcon, Loader2 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
+import { api } from "@/lib/api";
 
 interface CreateExamDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onSuccess?: () => void;
 }
 
-export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) {
+export function CreateExamDialog({ open, onOpenChange, onSuccess }: CreateExamDialogProps) {
   const [formData, setFormData] = useState({
-    title: "",
     course: "",
     type: "",
     time: "",
     duration: "",
     room: "",
+    classId: "",
   });
   const [examDate, setExamDate] = useState<Date>();
+  const [courses, setCourses] = useState<any[]>([]);
+  const [classes, setClasses] = useState<any[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  useEffect(() => {
+    if (open) {
+      setLoading(true);
+      Promise.all([
+        api.get('/teacher/courses'),
+        api.get('/teacher/classes')
+      ]).then(([coursesData, classesData]) => {
+        setCourses(coursesData);
+        setClasses(classesData);
+      }).catch(err => {
+        console.error(err);
+        toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
+      }).finally(() => setLoading(false));
+    }
+  }, [open]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    toast({
-      title: "Exam Scheduled",
-      description: `${formData.title} has been scheduled successfully.`,
-    });
-    onOpenChange(false);
-    setFormData({ title: "", course: "", type: "", time: "", duration: "", room: "" });
-    setExamDate(undefined);
+    
+    if (!formData.course || !formData.type || !examDate || !formData.time || !formData.duration) {
+      toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      await api.post(`/teacher/courses/${formData.course}/exams`, {
+        type: formData.type,
+        date: examDate.toISOString(),
+        time: formData.time,
+        duration: parseInt(formData.duration),
+        room: formData.room,
+        class_id: formData.classId ? parseInt(formData.classId) : null
+      });
+
+      toast({
+        title: "Exam Scheduled",
+        description: "The exam has been scheduled successfully.",
+      });
+      onOpenChange(false);
+      setFormData({ course: "", type: "", time: "", duration: "", room: "", classId: "" });
+      setExamDate(undefined);
+      if (onSuccess) onSuccess();
+    } catch (error) {
+      console.error(error);
+      toast({ title: "Error", description: "Failed to schedule exam", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -57,10 +103,11 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
                     <SelectValue placeholder="Select course" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="cs401">CS401 - Advanced ML</SelectItem>
-                    <SelectItem value="cs302">CS302 - Data Structures</SelectItem>
-                    <SelectItem value="cs201">CS201 - Programming</SelectItem>
-                    <SelectItem value="cs403">CS403 - Neural Networks</SelectItem>
+                    {courses.map(course => (
+                      <SelectItem key={course.id} value={String(course.id)}>
+                        {course.title}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -74,20 +121,26 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
                     <SelectItem value="midterm">Midterm</SelectItem>
                     <SelectItem value="final">Final Exam</SelectItem>
                     <SelectItem value="quiz">Quiz</SelectItem>
-                    <SelectItem value="practical">Practical</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="title">Exam Title *</Label>
-              <Input 
-                id="title" 
-                placeholder="e.g., Midterm Examination"
-                value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                required
-              />
+              <Label htmlFor="class">Assign to Class</Label>
+              <Select value={formData.classId || "all"} onValueChange={(value) => setFormData({ ...formData, classId: value === "all" ? "" : value })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="All classes" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Classes</SelectItem>
+                  {classes.filter(cls => cls.id).map(cls => (
+                    <SelectItem key={cls.id} value={String(cls.id)}>
+                      {cls.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Leave as "All Classes" to show exam to all students in the course</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
@@ -118,8 +171,8 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
               </div>
               <div className="space-y-2">
                 <Label htmlFor="time">Start Time *</Label>
-                <Input 
-                  id="time" 
+                <Input
+                  id="time"
                   type="time"
                   value={formData.time}
                   onChange={(e) => setFormData({ ...formData, time: e.target.value })}
@@ -130,8 +183,8 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="duration">Duration (minutes) *</Label>
-                <Input 
-                  id="duration" 
+                <Input
+                  id="duration"
                   type="number"
                   placeholder="120"
                   value={formData.duration}
@@ -141,8 +194,8 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
               </div>
               <div className="space-y-2">
                 <Label htmlFor="room">Room/Location *</Label>
-                <Input 
-                  id="room" 
+                <Input
+                  id="room"
                   placeholder="Lab 301"
                   value={formData.room}
                   onChange={(e) => setFormData({ ...formData, room: e.target.value })}
@@ -153,7 +206,10 @@ export function CreateExamDialog({ open, onOpenChange }: CreateExamDialogProps) 
           </div>
           <DialogFooter>
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-            <Button type="submit">Schedule Exam</Button>
+            <Button type="submit" disabled={submitting}>
+              {submitting && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              {submitting ? "Scheduling..." : "Schedule Exam"}
+            </Button>
           </DialogFooter>
         </form>
       </DialogContent>

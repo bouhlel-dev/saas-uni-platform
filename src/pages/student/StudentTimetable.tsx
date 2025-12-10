@@ -1,111 +1,191 @@
 import { DashboardLayout } from "@/components/DashboardLayout";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Calendar, Clock, MapPin } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { MapPin, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { StudentSidebar } from "@/components/StudentSidebar";
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const StudentTimetable = () => {
-  const sidebarContent = (
-    <nav className="space-y-2">
-      <NavLink to="/dashboard/student" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Overview
-      </NavLink>
-      <NavLink to="/dashboard/student/courses" className="block px-3 py-2 rounded-md hover:bg-muted">
-        My Courses
-      </NavLink>
-      <NavLink to="/dashboard/student/assignments" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Assignments
-      </NavLink>
-      <NavLink to="/dashboard/student/exams" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Exams
-      </NavLink>
-      <NavLink to="/dashboard/student/grades" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Grades
-      </NavLink>
-      <NavLink to="/dashboard/student/timetable" className="block px-3 py-2 rounded-md bg-primary/10 text-primary font-medium">
-        Timetable
-      </NavLink>
-    </nav>
-  );
+  const [schedules, setSchedules] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  const schedule = {
-    Monday: [
-      { time: "09:00-10:00", code: "CS201", name: "Programming Basics", teacher: "Dr. Williams", room: "Room 101" },
-      { time: "10:00-11:30", code: "CS401", name: "Advanced ML", teacher: "Dr. Smith", room: "Lab 301" },
-    ],
-    Tuesday: [
-      { time: "11:00-12:30", code: "MATH301", name: "Linear Algebra", teacher: "Dr. Brown", room: "Room 303" },
-      { time: "14:00-15:30", code: "CS302", name: "Data Structures", teacher: "Dr. Johnson", room: "Room 205" },
-    ],
-    Wednesday: [
-      { time: "09:00-10:00", code: "CS201", name: "Programming Basics", teacher: "Dr. Williams", room: "Room 101" },
-      { time: "10:00-11:30", code: "CS401", name: "Advanced ML", teacher: "Dr. Smith", room: "Lab 301" },
-    ],
-    Thursday: [
-      { time: "11:00-12:30", code: "MATH301", name: "Linear Algebra", teacher: "Dr. Brown", room: "Room 303" },
-      { time: "14:00-15:30", code: "CS302", name: "Data Structures", teacher: "Dr. Johnson", room: "Room 205" },
-    ],
-    Friday: [
-      { time: "09:00-10:00", code: "CS201", name: "Programming Basics", teacher: "Dr. Williams", room: "Room 101" },
-    ],
+  const days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  const times = [
+    '08:00', '09:00', '10:00', '11:00', '12:00',
+    '13:00', '14:00', '15:00', '16:00', '17:00'
+  ];
+
+  useEffect(() => {
+    const fetchSchedule = async () => {
+      try {
+        const data = await api.get('/student/schedule');
+        setSchedules(data);
+      } catch (error) {
+        console.error('Error fetching schedule:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchSchedule();
+  }, []);
+
+  const getScheduleForSlot = (day: string, time: string) => {
+    return schedules.find(s => s.day === day && s.time.startsWith(time));
   };
+
+  const handleExportPDF = () => {
+    const doc = new jsPDF('landscape');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    doc.setFontSize(16);
+    doc.setTextColor(40);
+    doc.text("My Class Schedule", pageWidth / 2, 15, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, pageWidth / 2, 22, { align: 'center' });
+
+    // Build timetable grid data (rows = times, columns = days)
+    const tableBody = times.map(time => {
+      const row: string[] = [time];
+      days.forEach(day => {
+        const slot = getScheduleForSlot(day, time);
+        if (slot) {
+          const parts = [slot.Course?.title || ''];
+          if (slot.Teacher?.User?.name) parts.push(slot.Teacher.User.name);
+          if (slot.room) parts.push(`📍${slot.room}`);
+          row.push(parts.join('\n'));
+        } else {
+          row.push('');
+        }
+      });
+      return row;
+    });
+
+    autoTable(doc, {
+      head: [['Time', ...days]],
+      body: tableBody,
+      startY: 28,
+      margin: { left: 10, right: 10 },
+      theme: 'grid',
+      tableWidth: 'auto',
+      styles: { 
+        fontSize: 7, 
+        cellPadding: 2,
+        valign: 'middle',
+        halign: 'center',
+        minCellHeight: 12,
+        overflow: 'linebreak'
+      },
+      headStyles: { 
+        fillColor: [66, 133, 244], 
+        textColor: 255,
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 8
+      },
+      columnStyles: {
+        0: { cellWidth: 18, fontStyle: 'bold', fillColor: [240, 240, 240] }
+      },
+      alternateRowStyles: { fillColor: [250, 250, 250] },
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index > 0 && data.cell.raw) {
+          data.cell.styles.fillColor = [232, 240, 254];
+        }
+      }
+    });
+
+    doc.save("class_schedule.pdf");
+  };
+
+  const sidebarContent = <StudentSidebar />;
+
+  if (loading) {
+    return (
+      <DashboardLayout sidebar={sidebarContent} title="My Timetable">
+        <div className="flex items-center justify-center h-full">
+          <p>Loading timetable...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout sidebar={sidebarContent} title="My Timetable">
       <div className="space-y-6">
-        <div>
-          <h2 className="text-2xl font-bold">My Timetable</h2>
-          <p className="text-muted-foreground">Your weekly class schedule</p>
+        <div className="flex justify-between items-center">
+          <div>
+            <h2 className="text-2xl font-bold">My Timetable</h2>
+            <p className="text-muted-foreground">Your weekly class schedule</p>
+          </div>
+          <Button variant="outline" onClick={handleExportPDF}>
+            <Download className="mr-2 h-4 w-4" /> Export PDF
+          </Button>
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="w-5 h-5" />
-              Spring Semester 2024
-            </CardTitle>
-            <CardDescription>Computer Science - Year 3</CardDescription>
-          </CardHeader>
-        </Card>
+        <Card className="overflow-hidden">
+          <div className="overflow-x-auto">
+            <div className="min-w-[800px]">
+              {/* Header Row */}
+              <div className="grid grid-cols-7 border-b bg-muted/50">
+                <div className="p-4 font-medium text-center border-r">Time</div>
+                {days.map(day => (
+                  <div key={day} className="p-4 font-medium text-center border-r last:border-r-0">
+                    {day}
+                  </div>
+                ))}
+              </div>
 
-        <div className="space-y-4">
-          {Object.entries(schedule).map(([day, classes]) => (
-            <Card key={day}>
-              <CardHeader>
-                <CardTitle className="text-lg">{day}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {classes.map((class_, idx) => (
-                    <div key={idx} className="flex items-center gap-4 p-4 border rounded-lg hover:bg-muted/50 transition-colors">
-                      <div className="text-center min-w-[100px]">
-                        <Clock className="w-4 h-4 mx-auto mb-1 text-primary" />
-                        <p className="text-sm font-medium whitespace-nowrap">{class_.time}</p>
+              {/* Time Rows */}
+              {times.map(time => (
+                <div key={time} className="grid grid-cols-7 border-b last:border-b-0">
+                  <div className="p-4 text-sm text-muted-foreground text-center border-r flex items-center justify-center bg-muted/5">
+                    {time}
+                  </div>
+                  {days.map(day => {
+                    const scheduleItem = getScheduleForSlot(day, time);
+                    return (
+                      <div
+                        key={`${day}-${time}`}
+                        className={`
+                          p-3 border-r last:border-r-0 min-h-[110px] relative
+                          ${scheduleItem ? 'bg-primary/10 hover:bg-primary/15 transition-colors' : ''}
+                        `}
+                      >
+                        {scheduleItem && (
+                          <div className="h-full flex flex-col gap-1">
+                            <div className="font-semibold text-primary text-sm leading-tight">
+                              {scheduleItem.Course?.title || 'Untitled Course'}
+                            </div>
+                            {scheduleItem.Course?.code && (
+                              <div className="text-xs text-muted-foreground">
+                                {scheduleItem.Course.code}
+                              </div>
+                            )}
+                            {scheduleItem.Teacher?.User?.name && (
+                              <div className="text-xs font-medium text-foreground/80">
+                                👤 {scheduleItem.Teacher.User.name}
+                              </div>
+                            )}
+                            <div className="flex items-center gap-1 mt-auto text-xs text-muted-foreground">
+                              <MapPin className="w-3 h-3 flex-shrink-0" />
+                              <span>{scheduleItem.room || 'TBD'}</span>
+                            </div>
+                          </div>
+                        )}
                       </div>
-                      <div className="w-px h-16 bg-border" />
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline">{class_.code}</Badge>
-                          <h4 className="font-semibold">{class_.name}</h4>
-                        </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span>{class_.teacher}</span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3 h-3" />
-                            {class_.room}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                  {classes.length === 0 && (
-                    <p className="text-center text-muted-foreground py-8">No classes scheduled</p>
-                  )}
+                    );
+                  })}
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+              ))}
+            </div>
+          </div>
+        </Card>
       </div>
     </DashboardLayout>
   );

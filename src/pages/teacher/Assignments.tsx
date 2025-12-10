@@ -3,205 +3,254 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Clock, Users, FileText } from "lucide-react";
-import { NavLink } from "react-router-dom";
+import { Plus, Clock, Users, FileText, Trash2 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { CreateAssignmentDialog } from "@/components/forms/CreateAssignmentDialog";
-import { ViewDetailsDialog } from "@/components/forms/ViewDetailsDialog";
-import { useState } from "react";
+import { AssignmentDetailsDialog } from "@/components/AssignmentDetailsDialog";
+import { EditAssignmentDialog } from "@/components/forms/EditAssignmentDialog";
+import { GradeSubmissionsDialog } from "@/components/forms/GradeSubmissionsDialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { formatDate } from "@/lib/formatUtils";
+import { useState, useEffect } from "react";
+import { api } from "@/lib/api";
+import { TeacherSidebar } from "@/components/TeacherSidebar";
 
 const Assignments = () => {
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [selectedAssignment, setSelectedAssignment] = useState<any>(null);
   const [showDetails, setShowDetails] = useState(false);
-  
-  const sidebarContent = (
-    <nav className="space-y-2">
-      <NavLink to="/dashboard/teacher" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Overview
-      </NavLink>
-      <NavLink to="/dashboard/teacher/courses" className="block px-3 py-2 rounded-md hover:bg-muted">
-        My Courses
-      </NavLink>
-      <NavLink to="/dashboard/teacher/assignments" className="block px-3 py-2 rounded-md bg-primary/10 text-primary font-medium">
-        Assignments
-      </NavLink>
-      <NavLink to="/dashboard/teacher/exams" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Exams
-      </NavLink>
-      <NavLink to="/dashboard/teacher/attendance" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Attendance
-      </NavLink>
-      <NavLink to="/dashboard/teacher/grades" className="block px-3 py-2 rounded-md hover:bg-muted">
-        Grades
-      </NavLink>
-    </nav>
-  );
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [showGradeDialog, setShowGradeDialog] = useState(false);
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
+  const [assignmentToDelete, setAssignmentToDelete] = useState<any>(null);
+  const [deleting, setDeleting] = useState(false);
 
-  const assignments = [
-    { 
-      id: 1,
-      course: "CS401", 
-      title: "ML Model Implementation", 
-      dueDate: "Mar 25, 2024", 
-      submissions: 38, 
-      total: 45,
-      graded: 25,
-      status: "Active"
-    },
-    { 
-      id: 2,
-      course: "CS302", 
-      title: "Binary Tree Project", 
-      dueDate: "Mar 22, 2024", 
-      submissions: 65, 
-      total: 67,
-      graded: 60,
-      status: "Active"
-    },
-    { 
-      id: 3,
-      course: "CS201", 
-      title: "Python Basics Quiz", 
-      dueDate: "Mar 20, 2024", 
-      submissions: 89, 
-      total: 89,
-      graded: 89,
-      status: "Closed"
-    },
-    { 
-      id: 4,
-      course: "CS403", 
-      title: "CNN Architecture Design", 
-      dueDate: "Mar 28, 2024", 
-      submissions: 12, 
-      total: 33,
-      graded: 8,
-      status: "Active"
-    },
-    { 
-      id: 5,
-      course: "CS401", 
-      title: "Dataset Analysis Report", 
-      dueDate: "Apr 01, 2024", 
-      submissions: 5, 
-      total: 45,
-      graded: 0,
-      status: "Active"
-    },
-  ];
+  const sidebarContent = <TeacherSidebar />;
+
+  const [assignments, setAssignments] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchAssignments = async () => {
+      try {
+        const data = await api.get('/teacher/assignments');
+
+        const mappedAssignments = data.map((a: any) => ({
+          id: a.id,
+          course: a.Course?.title || "Unknown Course",
+          title: a.title,
+          dueDate: formatDate(a.deadline),
+          submissions: a.submissions || 0,
+          total: a.total || 0,
+          graded: a.graded || 0,
+          status: new Date(a.deadline) > new Date() ? "Active" : "Closed",
+          description: a.description, // Ensure description is passed if available
+          points: a.points // Ensure points are passed if available
+        }));
+        setAssignments(mappedAssignments);
+      } catch (error) {
+        console.error(error);
+        toast({ title: "Error", description: "Failed to load assignments", variant: "destructive" });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAssignments();
+  }, []);
+
+  if (loading) return <div className="p-8 text-center">Loading assignments...</div>;
 
   const handleCreateAssignment = () => {
     setShowCreateDialog(true);
+  };
+
+  const handleAssignmentUpdate = (updatedAssignment: any) => {
+    setAssignments(assignments.map((a: any) =>
+      a.id === updatedAssignment.id ? { ...a, ...updatedAssignment } : a
+    ));
+    setSelectedAssignment(updatedAssignment);
+  };
+
+  const handleDeleteClick = (assignment: any) => {
+    setAssignmentToDelete(assignment);
+    setShowDeleteDialog(true);
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!assignmentToDelete) return;
+    
+    setDeleting(true);
+    try {
+      await api.delete(`/assignments/${assignmentToDelete.id}`);
+      setAssignments(assignments.filter((a: any) => a.id !== assignmentToDelete.id));
+      toast({
+        title: "Assignment Deleted",
+        description: `"${assignmentToDelete.title}" has been deleted successfully.`,
+      });
+      setShowDeleteDialog(false);
+      setAssignmentToDelete(null);
+    } catch (error: any) {
+      console.error('Error deleting assignment:', error);
+      toast({
+        title: "Error",
+        description: error?.message || "Failed to delete assignment",
+        variant: "destructive"
+      });
+    } finally {
+      setDeleting(false);
+    }
   };
 
   return (
     <>
       <CreateAssignmentDialog open={showCreateDialog} onOpenChange={setShowCreateDialog} />
       <DashboardLayout sidebar={sidebarContent} title="Assignments">
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-2xl font-bold">Assignments</h2>
-            <p className="text-muted-foreground">Manage and grade student assignments</p>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-2xl font-bold">Assignments</h2>
+              <p className="text-muted-foreground">Manage course assignments and grading</p>
+            </div>
+            <Button onClick={handleCreateAssignment}>
+              <Plus className="w-4 h-4 mr-2" />
+              Create Assignment
+            </Button>
           </div>
-          <Button onClick={handleCreateAssignment}>
-            <Plus className="w-4 h-4 mr-2" />
-            Create Assignment
-          </Button>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            {assignments.map((assignment: any) => (
+              <Card key={assignment.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Badge variant="secondary">{assignment.course}</Badge>
+                        <Badge variant={assignment.status === "Active" ? "default" : "outline"}>
+                          {assignment.status}
+                        </Badge>
+                      </div>
+                      <CardTitle className="text-xl">{assignment.title}</CardTitle>
+                      <CardDescription className="flex items-center gap-1 mt-1">
+                        <Clock className="w-3 h-3" />
+                        Due: {assignment.dueDate}
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setShowDetails(true);
+                      }}
+                    >
+                      View Details
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4 text-center">
+                    <div className="p-2 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{assignment.submissions}</div>
+                      <div className="text-xs text-muted-foreground">Submitted</div>
+                    </div>
+                    <div className="p-2 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{assignment.graded}</div>
+                      <div className="text-xs text-muted-foreground">Graded</div>
+                    </div>
+                    <div className="p-2 bg-muted rounded-lg">
+                      <div className="text-2xl font-bold">{assignment.total - assignment.submissions}</div>
+                      <div className="text-xs text-muted-foreground">Pending</div>
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setShowEditDialog(true);
+                      }}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      className="flex-1"
+                      onClick={() => {
+                        setSelectedAssignment(assignment);
+                        setShowGradeDialog(true);
+                      }}
+                    >
+                      Grade Submissions
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => handleDeleteClick(assignment)}
+                      title="Delete assignment"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          {selectedAssignment && (
+            <>
+              <AssignmentDetailsDialog
+                open={showDetails}
+                onOpenChange={setShowDetails}
+                assignment={selectedAssignment}
+              />
+              <EditAssignmentDialog
+                open={showEditDialog}
+                onOpenChange={setShowEditDialog}
+                assignment={selectedAssignment}
+                onSave={handleAssignmentUpdate}
+              />
+              <GradeSubmissionsDialog
+                open={showGradeDialog}
+                onOpenChange={setShowGradeDialog}
+                assignment={selectedAssignment}
+                onSave={handleAssignmentUpdate}
+              />
+            </>
+          )}
+
+          <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Assignment</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{assignmentToDelete?.title}"? This action cannot be undone and will also delete all student submissions for this assignment.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                >
+                  {deleting ? "Deleting..." : "Delete"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
-
-        <div className="grid gap-4">
-          {assignments.map((assignment) => (
-            <Card key={assignment.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Badge variant="secondary">{assignment.course}</Badge>
-                      <Badge variant={assignment.status === "Active" ? "default" : "outline"}>
-                        {assignment.status}
-                      </Badge>
-                    </div>
-                    <CardTitle className="text-xl">{assignment.title}</CardTitle>
-                    <CardDescription className="flex items-center gap-1 mt-1">
-                      <Clock className="w-3 h-3" />
-                      Due: {assignment.dueDate}
-                    </CardDescription>
-                  </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      setSelectedAssignment(assignment);
-                      setShowDetails(true);
-                    }}
-                  >
-                    View Details
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <FileText className="w-4 h-4 text-primary" />
-                      <p className="text-sm text-muted-foreground">Submissions</p>
-                    </div>
-                    <p className="text-2xl font-bold">{assignment.submissions}/{assignment.total}</p>
-                  </div>
-                  <div className="p-3 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Users className="w-4 h-4 text-primary" />
-                      <p className="text-sm text-muted-foreground">Graded</p>
-                    </div>
-                    <p className="text-2xl font-bold">{assignment.graded}/{assignment.submissions}</p>
-                  </div>
-                  <div className="p-3 border rounded-lg">
-                    <p className="text-sm text-muted-foreground mb-1">Pending</p>
-                    <p className="text-2xl font-bold text-orange-600 dark:text-orange-400">
-                      {assignment.submissions - assignment.graded}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Submission Progress</span>
-                    <span className="font-medium">
-                      {Math.round((assignment.submissions / assignment.total) * 100)}%
-                    </span>
-                  </div>
-                  <Progress value={(assignment.submissions / assignment.total) * 100} />
-                </div>
-
-                <div className="flex gap-2">
-                  <Button variant="outline" size="sm" className="flex-1">Edit</Button>
-                  <Button size="sm" className="flex-1">Grade Submissions</Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {selectedAssignment && (
-          <ViewDetailsDialog
-            open={showDetails}
-            onOpenChange={setShowDetails}
-            title={selectedAssignment.title}
-            description={`Course: ${selectedAssignment.course}`}
-            details={[
-              { label: "Due Date", value: selectedAssignment.dueDate },
-              { label: "Status", value: selectedAssignment.status, badge: true },
-              { label: "Total Students", value: selectedAssignment.total },
-              { label: "Submissions", value: selectedAssignment.submissions },
-              { label: "Graded", value: selectedAssignment.graded },
-              { label: "Pending", value: selectedAssignment.submissions - selectedAssignment.graded },
-            ]}
-          />
-        )}
-      </div>
-    </DashboardLayout>
+      </DashboardLayout>
     </>
   );
 };
